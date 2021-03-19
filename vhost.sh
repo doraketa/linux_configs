@@ -182,7 +182,7 @@ for dir_name in ${HOST_DIRS[@]}; do
 	echo -e "\t $host_dir_path/$dir_name"
 done
  
-touch ${host_dir_path}'/www/index.html'
+touch ${host_dir_path}'/www/index.php'
  
 # Рекурсивно проставляем права
 chown -R $OWNER_NAME:$OWNER_GROUP $host_dir_path
@@ -190,28 +190,39 @@ chown -R $OWNER_NAME:$OWNER_GROUP $host_dir_path
 #  Генерим темплейт под nginx
  
 nginx_template="server {
-      listen *:80;
- 
-      server_name $domain_name www.$domain_name;
-      access_log  $HOME_WWW/$host_dir/logs/nginx.access.log;
- 
-      location ~* ^.+\.(jpg|jpeg|gif|png|svg|js|css|mp3|ogg|mpe?g|avi|zip|gz|bz2?|rar) {
-            root $HOME_WWW/$host_dir/www;
-      }
- 
- 
-      location / {
-            proxy_pass http://backend;
-            proxy_redirect off;
-            proxy_set_header Host \$host;
-            proxy_set_header X-Real-IP \$remote_addr;
- 
-            charset utf-8;
-            index index.html;
-            root $HOME_WWW/$host_dir/www;
-      }
+  listen 80; # порт, прослушивающий nginx
+  server_name $domain_name www.$domain_name;
+  $HOME_WWW/$host_dir/logs/nginx.access.log;
+  
+  root $HOME_WWW/$host_dir/www;
+
+  index index.php;
+        
+  # serve static files directly
+  location ~* \.(jpg|jpeg|gif|css|png|js|ico|html)$ {
+    access_log off;
+    expires max;
+    log_not_found off;
+  }
+
+
+  location / {
+    try_files $uri $uri/ /index.php?$query_string;
+  }
+
+  location ~* \.php$ {
+    try_files $uri = 404;
+    fastcgi_split_path_info ^(.+\.php)(/.+)$;
+    fastcgi_pass unix:/var/run/php/php7.4-fpm.sock;
+    fastcgi_index index.php;
+    fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+    include fastcgi_params;
+  }
+
+  location ~ /\.ht {
+    deny all;
+  }
 }"
- 
  
 # Создаем конфиг виртуального хоста nginx
 echo 'Создаем конфиг виртуального хоста nginx:'
